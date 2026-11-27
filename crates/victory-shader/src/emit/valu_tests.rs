@@ -263,7 +263,9 @@ fn run_cases_on(
         }
         ran += 1;
     }
-    assert!(ran > 0, "neither hardware nor WARP SM 6.6 device available");
+    // A wave of 32 needs a device that runs one: with no hardware adapter
+    // and WARP's 4-lane waves (CI) nothing runs, as in `synthetic_tests`.
+    assert!(ran > 0 || wave32, "neither hardware nor WARP SM 6.6 device available");
 }
 
 #[test]
