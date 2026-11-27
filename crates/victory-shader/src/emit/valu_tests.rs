@@ -230,14 +230,30 @@ fn run_cases_on(
                 continue;
             }
         };
-        let (root, pso) = match host.compute_pipeline(shader) {
-            Ok(p) => p,
-            Err(e) if wave32 && warp => {
-                eprintln!("{label}: no pipeline for a wave of 32 ({e}); skipped");
+        if wave32 {
+            use windows::Win32::Graphics::Direct3D12::{
+                D3D12_FEATURE_D3D12_OPTIONS1, D3D12_FEATURE_DATA_D3D12_OPTIONS1,
+            };
+            let mut options = D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
+            // SAFETY: this feature query writes the OPTIONS1 structure.
+            unsafe {
+                host.device.CheckFeatureSupport(
+                    D3D12_FEATURE_D3D12_OPTIONS1,
+                    (&raw mut options).cast(),
+                    size_of_val(&options) as u32,
+                )
+            }
+            .unwrap_or_else(|e| panic!("{label}: query wave sizes: {e}"));
+            let (min, max) = (options.WaveLaneCountMin, options.WaveLaneCountMax);
+            if !options.WaveOps.as_bool() || !(min..=max).contains(&32) {
+                eprintln!("{label}: Wave32 unavailable (lanes {min}..{max}); skipped");
                 continue;
             }
-            Err(e) => panic!("{label}: compute_pipeline failed: {e}"),
-        };
+            eprintln!("{label}: testing Wave32 (lanes {min}..{max})");
+        }
+        let (root, pso) = host
+            .compute_pipeline(shader)
+            .unwrap_or_else(|e| panic!("{label}: compute_pipeline failed: {e}"));
         for (i, &inputs) in cases.iter().enumerate() {
             let mut ud = vec![0u32; shader.user_data_dwords().max(1) as usize];
             for u in &shader.user_data {
